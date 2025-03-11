@@ -1,0 +1,172 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+local FOV = 90  -- Campo de visão do aimbot
+local MaxDistance = 800  -- Máxima distância para ESP
+
+-- Configurações do Menu
+local ESP_Enabled = true
+local Aimbot_Enabled = true
+
+-- Criar FOV do Aimbot
+local FOVCircle = Drawing.new("Circle")
+FOVCircle.Radius = FOV
+FOVCircle.Thickness = 2
+FOVCircle.Color = Color3.fromRGB(255, 255, 0)
+FOVCircle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+FOVCircle.Visible = true
+
+-- Criar ESP nos inimigos
+local function createESP(player)
+    if player == LocalPlayer then return end  
+
+    local box = Drawing.new("Square")
+    box.Thickness = 2
+    box.Color = Color3.fromRGB(0, 255, 0)
+    box.Filled = false
+    box.Visible = false
+
+    local healthText = Drawing.new("Text")
+    healthText.Color = Color3.fromRGB(255, 255, 255)
+    healthText.Size = 16
+    healthText.Center = true
+    healthText.Visible = false
+
+    local nameText = Drawing.new("Text")
+    nameText.Color = Color3.fromRGB(255, 0, 0)
+    nameText.Size = 16
+    nameText.Center = true
+    nameText.Visible = false
+
+    local function updateESP()
+        if not ESP_Enabled or not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") or not player.Character:FindFirstChild("Humanoid") then
+            box.Visible = false
+            healthText.Visible = false
+            nameText.Visible = false
+            return
+        end
+
+        local rootPart = player.Character:FindFirstChild("HumanoidRootPart")
+        local humanoid = player.Character:FindFirstChild("Humanoid")
+        local distance = (LocalPlayer.Character.HumanoidRootPart.Position - rootPart.Position).Magnitude
+
+        if distance > MaxDistance then
+            box.Visible = false
+            healthText.Visible = false
+            nameText.Visible = false
+            return
+        end
+
+        local screenPos, onScreen = Camera:WorldToViewportPoint(rootPart.Position)
+
+        if onScreen then
+            local size = Vector2.new(50, 100)
+            local position = Vector2.new(screenPos.X - size.X / 2, screenPos.Y - size.Y / 2)
+
+            box.Position = position
+            box.Size = size
+            box.Visible = true
+
+            healthText.Position = Vector2.new(position.X + size.X / 2, position.Y - 10)
+            healthText.Text = "HP: " .. math.floor(humanoid.Health)
+            healthText.Visible = true
+
+            nameText.Position = Vector2.new(position.X + size.X / 2, position.Y - 30)
+            nameText.Text = player.Name .. " | " .. math.floor(distance) .. "m"
+            nameText.Visible = true
+        else
+            box.Visible = false
+            healthText.Visible = false
+            nameText.Visible = false
+        end
+    end
+
+    RunService.RenderStepped:Connect(updateESP)
+end
+
+-- Aimbot
+local function getClosestEnemy()
+    local closestEnemy = nil
+    local shortestDistance = FOV
+
+    if not Aimbot_Enabled then return nil end
+
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") and player.Character:FindFirstChild("Humanoid") then
+            local rootPart = player.Character:FindFirstChild("HumanoidRootPart")
+            local distance = (LocalPlayer.Character.HumanoidRootPart.Position - rootPart.Position).Magnitude
+
+            if distance <= MaxDistance then
+                local screenPos, onScreen = Camera:WorldToViewportPoint(rootPart.Position)
+                if onScreen then
+                    local mousePos = UserInputService:GetMouseLocation()
+                    local distToCursor = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
+
+                    if distToCursor < shortestDistance then
+                        closestEnemy = rootPart
+                        shortestDistance = distToCursor
+                    end
+                end
+            end
+        end
+    end
+
+    return closestEnemy
+end
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if input.UserInputType == Enum.UserInputType.MouseButton2 and Aimbot_Enabled then
+        local target = getClosestEnemy()
+        if target then
+            Camera.CFrame = CFrame.new(Camera.CFrame.Position, target.Position)
+        end
+    end
+end)
+
+-- Adiciona ESP para jogadores existentes
+for _, player in pairs(Players:GetPlayers()) do
+    if player ~= LocalPlayer then
+        createESP(player)
+    end
+end
+
+-- Adiciona ESP para novos jogadores que entrarem no jogo
+Players.PlayerAdded:Connect(function(player)
+    createESP(player)
+end)
+
+-- Criar Menu Básico no Console
+local function toggleESP()
+    ESP_Enabled = not ESP_Enabled
+    print("[ESP] " .. (ESP_Enabled and "Ativado" or "Desativado"))
+end
+
+local function toggleAimbot()
+    Aimbot_Enabled = not Aimbot_Enabled
+    print("[Aimbot] " .. (Aimbot_Enabled and "Ativado" or "Desativado"))
+end
+
+local function showMenu()
+    print("\n=== MENU ESP ===")
+    print("[1] Ativar/Desativar ESP (Atualmente: " .. (ESP_Enabled and "Ativado" or "Desativado") .. ")")
+    print("[2] Ativar/Desativar Aimbot (Atualmente: " .. (Aimbot_Enabled and "Ativado" or "Desativado") .. ")")
+    print("[3] Sair do Menu")
+end
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if input.KeyCode == Enum.KeyCode.M then  -- Abrir menu ao pressionar "M"
+        showMenu()
+        local choice = io.read()
+        if choice == "1" then
+            toggleESP()
+        elseif choice == "2" then
+            toggleAimbot()
+        elseif choice == "3" then
+            print("Menu fechado.")
+        else
+            print("Opção inválida!")
+        end
+    end
+end)
